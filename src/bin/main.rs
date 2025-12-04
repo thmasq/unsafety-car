@@ -16,7 +16,7 @@ use core::cmp::Ordering;
 use defmt::{error, info, warn};
 use embassy_executor::Spawner;
 use embassy_net::{Config, Ipv4Address, Ipv4Cidr, StackResources, StaticConfigV4};
-use embassy_time::{Duration, Timer};
+use embassy_time::{Duration, Timer, with_timeout};
 use embedded_hal::pwm::SetDutyCycle;
 use esp_hal::clock::CpuClock;
 use esp_hal::gpio::DriveMode;
@@ -223,8 +223,8 @@ async fn main(spawner: Spawner) -> ! {
     let mut buf = [0u8; 64];
 
     loop {
-        match socket.recv_from(&mut buf).await {
-            Ok((size, _endpoint)) => {
+        match with_timeout(Duration::from_millis(500), socket.recv_from(&mut buf)).await {
+            Ok(Ok((size, _endpoint))) => {
                 if size == 2 {
                     let throttle_byte = buf[0] as i8;
                     let steer_byte = buf[1] as i8;
@@ -259,9 +259,14 @@ async fn main(spawner: Spawner) -> ! {
                     warn!("Invalid packet size: {}", size);
                 }
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 warn!("UDP Receive Error: {:?}", e);
-                Timer::after(Duration::from_millis(100)).await;
+            }
+            Err(_) => {
+                warn!("Signal Lost! Engaging Failsafe.");
+                let _ = front_channel.set_duty_cycle(0);
+                let _ = back_channel.set_duty_cycle(0);
+                let _ = servo_channel.set_duty_cycle(calculate_servo_duty(0, MAX_DUTY));
             }
         }
     }
