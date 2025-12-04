@@ -36,6 +36,8 @@ use esp_backtrace as _;
 use esp_println as _;
 use static_cell::StaticCell;
 
+esp_bootloader_esp_idf::esp_app_desc!();
+
 const SSID: &str = "FSE-Tsunderacer";
 const PASSWORD: &str = "cirnobaka9";
 const LISTEN_PORT: u16 = 9999;
