@@ -5,7 +5,14 @@
     reason = "mem::forget is generally not safe to do with esp_hal types, especially those \
     holding buffers for the duration of a data transfer."
 )]
+#![allow(
+    clippy::missing_safety_doc,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
 
+use core::cmp::Ordering;
 use defmt::{error, info, warn};
 use embassy_executor::Spawner;
 use embassy_net::{Config, Ipv4Address, Ipv4Cidr, StackResources, StaticConfigV4};
@@ -51,20 +58,21 @@ fn calculate_servo_duty(angle_byte: i8, max_duty: u16) -> u16 {
     let min_pulse_ms = 1.0;
     let max_pulse_ms = 2.0;
 
-    let input = (angle_byte as f32).clamp(-100.0, 100.0);
+    let input = f32::from(angle_byte).clamp(-100.0, 100.0);
 
     let normalized = (input - (-100.0)) / (100.0 - (-100.0));
 
     let pulse_ms = min_pulse_ms + (normalized * (max_pulse_ms - min_pulse_ms));
 
-    let duty = (pulse_ms / (SERVO_PERIOD_MS as f32)) * (max_duty as f32);
+    #[allow(clippy::cast_precision_loss)]
+    let duty = (pulse_ms / (SERVO_PERIOD_MS as f32)) * f32::from(max_duty);
 
     duty as u16
 }
 
 fn calculate_motor_duty(val: u8, max_duty: u16) -> u16 {
-    let percent = (val as f32) / 100.0;
-    (percent * max_duty as f32) as u16
+    let percent = f32::from(val) / 100.0;
+    (percent * f32::from(max_duty)) as u16
 }
 
 #[embassy_executor::task]
@@ -169,6 +177,7 @@ async fn main(spawner: Spawner) -> ! {
     let net_config = Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(STATIC_IP, 24),
         gateway: Some(GATEWAY_IP),
+        #[allow(clippy::default_trait_access)]
         dns_servers: Default::default(),
     });
 
@@ -221,20 +230,24 @@ async fn main(spawner: Spawner) -> ! {
                     let _ = servo_channel.set_duty_cycle(servo_duty);
 
                     // 2. Throttle
-                    if throttle_byte > 0 {
-                        // Forward
-                        let duty = calculate_motor_duty(throttle_byte as u8, MAX_DUTY);
-                        let _ = back_channel.set_duty_cycle(0);
-                        let _ = front_channel.set_duty_cycle(duty);
-                    } else if throttle_byte < 0 {
-                        // Reverse
-                        let duty = calculate_motor_duty(throttle_byte.abs() as u8, MAX_DUTY);
-                        let _ = front_channel.set_duty_cycle(0);
-                        let _ = back_channel.set_duty_cycle(duty);
-                    } else {
-                        // Stop
-                        let _ = front_channel.set_duty_cycle(0);
-                        let _ = back_channel.set_duty_cycle(0);
+                    match throttle_byte.cmp(&0) {
+                        Ordering::Greater => {
+                            // Forward
+                            let duty = calculate_motor_duty(throttle_byte as u8, MAX_DUTY);
+                            let _ = back_channel.set_duty_cycle(0);
+                            let _ = front_channel.set_duty_cycle(duty);
+                        }
+                        Ordering::Less => {
+                            // Reverse
+                            let duty = calculate_motor_duty(throttle_byte.unsigned_abs(), MAX_DUTY);
+                            let _ = front_channel.set_duty_cycle(0);
+                            let _ = back_channel.set_duty_cycle(duty);
+                        }
+                        Ordering::Equal => {
+                            // Stop
+                            let _ = front_channel.set_duty_cycle(0);
+                            let _ = back_channel.set_duty_cycle(0);
+                        }
                     }
                 } else {
                     warn!("Invalid packet size: {}", size);
