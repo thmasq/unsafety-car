@@ -29,6 +29,8 @@ smoltcp = { version = "0.12.0", default-features = false, features = ["defmt", "
 
 critical-section = "1.2.0"
 static_cell = "2.1.1"
+panic-halt = "1.0.0"
+embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 
 [profile.dev]
 opt-level = "s"
