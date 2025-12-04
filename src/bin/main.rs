@@ -31,7 +31,9 @@ use esp_hal::timer::timg::TimerGroup;
 use esp_radio::wifi::{
     ClientConfig, Config as WifiDriverConfig, ModeConfig, WifiController, WifiDevice, WifiEvent,
 };
-use panic_halt as _;
+
+use esp_backtrace as _;
+use esp_println as _;
 use static_cell::StaticCell;
 
 const SSID: &str = "FSE-Tsunderacer";
@@ -107,7 +109,7 @@ async fn main(spawner: Spawner) -> ! {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
-    esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 72 * 1024);
+    esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 66320);
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
 
