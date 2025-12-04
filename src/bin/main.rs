@@ -29,7 +29,8 @@ use esp_hal::rng::Rng;
 use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
 use esp_radio::wifi::{
-    ClientConfig, Config as WifiDriverConfig, ModeConfig, WifiController, WifiDevice, WifiEvent,
+    AccessPointConfig, AuthMethod, Config as WifiDriverConfig, ModeConfig, WifiController,
+    WifiDevice, WifiEvent,
 };
 
 use esp_backtrace as _;
@@ -84,14 +85,15 @@ async fn connection(mut controller: WifiController<'static>) {
     info!("Starting Wi-Fi AP task");
     loop {
         if !matches!(controller.is_started(), Ok(true)) {
-            let client_config = ModeConfig::Client(
-                ClientConfig::default()
+            let ap_config = ModeConfig::AccessPoint(
+                AccessPointConfig::default()
                     .with_ssid(SSID.into())
-                    .with_password(PASSWORD.into()),
+                    .with_password(PASSWORD.into())
+                    .with_auth_method(AuthMethod::Wpa2Personal),
             );
 
-            controller.set_config(&client_config).unwrap();
-            info!("Starting Wi-Fi controller...");
+            controller.set_config(&ap_config).unwrap();
+            info!("Starting Wi-Fi controller in AP Mode...");
             controller.start().unwrap();
         }
 
@@ -176,7 +178,7 @@ async fn main(spawner: Spawner) -> ! {
     let (controller, interfaces) =
         esp_radio::wifi::new(init, peripherals.WIFI, WifiDriverConfig::default()).unwrap();
 
-    let wifi_interface = interfaces.sta;
+    let wifi_interface = interfaces.ap;
 
     let net_config = Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(STATIC_IP, 24),
