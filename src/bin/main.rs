@@ -50,6 +50,8 @@ const SERVO_FREQ: u32 = 50;
 const SERVO_PERIOD_MS: u32 = 1000 / SERVO_FREQ;
 const MAX_DUTY: u16 = 8191;
 
+const MIN_THROTTLE: u8 = 15;
+
 macro_rules! mk_static {
     ($t:ty,$val:expr) => {{
         static STATIC_CELL: StaticCell<$t> = StaticCell::new();
@@ -226,10 +228,14 @@ async fn main(spawner: Spawner) -> ! {
         match with_timeout(Duration::from_millis(500), socket.recv_from(&mut buf)).await {
             Ok(Ok((size, _endpoint))) => {
                 if size == 2 {
-                    let throttle_byte = buf[0] as i8;
+                    let mut throttle_byte = buf[0] as i8;
                     let steer_byte = buf[1] as i8;
 
                     info!("T: {}, S: {}", throttle_byte, steer_byte);
+
+                    if throttle_byte.unsigned_abs() < MIN_THROTTLE {
+                        throttle_byte = 0;
+                    }
 
                     // 1. Steering
                     let servo_duty = calculate_servo_duty(steer_byte, MAX_DUTY);
